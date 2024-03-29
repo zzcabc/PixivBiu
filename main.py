@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import time
 import traceback
 import webbrowser
 
@@ -32,6 +33,7 @@ def api(path):
 
 if __name__ == '__main__':
     # Altfe 框架初始化
+    time.sleep(10)
     classRoot.setENV("rootPath", rootPath)
     classRoot.setENV("rootPathFrozen", rootPathFrozen)
     bridge.bridgeInit().run(hint=True)
