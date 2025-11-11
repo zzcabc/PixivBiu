@@ -2,8 +2,10 @@
 
 PixivBiu，一款不错的 Pixiv **辅助**工具。
 
-- [English](./README_EN.md)
-- [日本語](./README_JA.md)
+- [中文](/README.md)
+- [English](/docs/README_EN.md)
+- [日本語](/docs/README_JA.md)
+- [Español](/docs/README_ES.md)
 
 ## 基础功能
 
@@ -19,13 +21,13 @@ PixivBiu，一款不错的 Pixiv **辅助**工具。
 
 * 安装依赖，执行 `pip install -r requirements.txt`
   + [Flask](https://github.com/pallets/flask)、[requests](https://github.com/psf/requests)、[PyYAML](https://github.com/yaml/pyyaml)、[Pillow](https://github.com/python-pillow/Pillow)、[PixivPy](https://github.com/upbit/pixivpy)、[PySocks](https://github.com/Anorov/PySocks)
-* 修改 `./config.yml` 相关配置项，具体可参考[默认配置文件](./app/config/biu_default.yml)
+* 修改 `./config.yml` 相关配置项，具体可参考[默认配置文件](/app/config/biu_default.yml)
 * 执行 `python main.py`
 * 访问运行地址，默认为 `http://127.0.0.1:4001/`
 
 ### 已编译程序
 
-此项目基于 `Python@3.7(+)` 编写，使用 `PyInstaller` 构建编译版本。
+此项目基于 `Python@3.10(+)` 编写，使用 `PyInstaller` 构建编译版本。
 
 这里提供 Windows、macOS 和 Ubuntu 的编译版本，如有其他需求请自行编译。
 

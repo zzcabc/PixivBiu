@@ -10,12 +10,15 @@ import requests
 from pixivpy3 import *
 
 from altfe.interface.root import interRoot
+from app.v2.utils.sprint import SPrint
+
+_ln = lambda val, header="PixivBiu": print(f"[{header}] " + val if header else val)
 
 
 @interRoot.bind("biu", "LIB_CORE")
 class CoreBiu(interRoot):
     def __init__(self):
-        self.ver = 206010
+        self.ver = 206040
         self.place = "local"
         self.sysPlc = platform.system()
         self.api_route = "direct"
@@ -37,12 +40,15 @@ class CoreBiu(interRoot):
         atexit.register(self.__before_exit)
         self.__load_config()  # 加载配置项
         self.__pre_check()  # 运行前检测
-        self.proxy = self.__get_system_proxy()  # 加载代理地址
         self.biuInfo = self.__get_biu_info()  # 加载联网信息
-        self.__check_for_update()  # 检测更新
-        if self.api_route != "bypassSNI":
-            self.__check_out_network()  # 检测网络是否可通
-        self.__login()  # 登录
+        try:
+            self.__login()  # 登录
+        except Exception as e:
+            e_str = str(e)
+            if e_str != "":
+                _ln(e_str)
+            input(self.lang("common.press_to_exit"))
+            sys.exit(0)
         self.__set_image_host()  # 设置图片服务器地址
         self.__show_ready_info()  # 展示初始化完成信息
         return self
@@ -55,7 +61,7 @@ class CoreBiu(interRoot):
         加载 pixivbiu 的全局配置项。
         """
         if len(self.sets) == 0:
-            self.STATIC.localMsger.red(self.lang("config.fail_to_load_config"))
+            _ln(SPrint.red(self.lang("config.fail_to_load_config")))
             input(self.lang("common.press_to_exit"))
             sys.exit(0)
         self.api_route = self.sets["sys"]["apiRoute"]
@@ -72,166 +78,176 @@ class CoreBiu(interRoot):
         """
         # 检测端口是否被占用
         if self.STATIC.util.is_prot_in_use(self.sets["sys"]["host"].split(":")[1]):
-            self.STATIC.localMsger.red(self.lang("config.hint_port_is_in_use"))
+            _ln(SPrint.red(self.lang("config.hint_port_is_in_use")))
             input(self.lang("common.press_to_exit"))
             sys.exit(0)
-        # 检测 cache 大小
+        # 检测 Cache 大小
         cache_path = self.getENV("rootPath") + "usr/cache/search/"
         size_cache = self.STATIC.file.get_dir_size_mib(cache_path)
         if size_cache > float(self.sets["biu"]["search"]["maxCacheSizeMiB"]):
             self.STATIC.file.clearDIR(cache_path)
-
-    def __get_system_proxy(self):
-        """
-        获取系统代理设置。
-        :return:
-        """
-        if self.sets["sys"]["proxy"] == "no":
-            return ""
-        if self.sets["sys"]["proxy"] != "":
-            return self.sets["sys"]["proxy"]
-        proxy_address = self.STATIC.util.get_system_proxy(self.sysPlc)
-        if proxy_address != "":
-            self.STATIC.localMsger.msg(f"{self.lang('config.hint_proxy_in_use')}: {proxy_address}")
-        return proxy_address
 
     def __get_biu_info(self):
         """
         获取联网 pixivbiu 相关信息。
         """
         try:
-            return requests.get("https://biu.tls.moe/d/biuinfo.json", timeout=6, verify=False).json()
+            return requests.get("https://biu.tls.moe/d/biuinfo.json", timeout=6).json()
         except:
-            return {"version": -1, "pApiURL": "public-api.secure.pixiv.net", "pPximgRProxyURL": "https://i.pixiv.re"}
+            return {
+                "version": -1,
+                "pApiURL": "public-api.secure.pixiv.net",
+                "pPximgRProxyURL": "https://i.pixiv.re",
+            }
 
-    def __check_for_update(self):
-        """
-        检测是否有更新，仅进行本地版本号对比。
-        """
-        if self.sets["sys"]["ignoreOutdated"]:
-            return
-        if self.biuInfo["version"] == -1:
-            self.STATIC.localMsger.red(self.lang("outdated.fail_to_check_duo_to_network"))
-        elif self.ver < self.biuInfo["version"]:
-            self.STATIC.localMsger.red(f"%s@%s! %s." % (
-                self.lang("outdated.hint_exist_new"), self.format_version(self.biuInfo["version"]),
-                self.lang("outdated.tell_to_download")))
-            input(self.lang("outdated.press_to_use_old"))
-
-    def __check_out_network(self):
-        """
-        检测网络是否可通。若不可通，则启用 bypass 模式。
-        """
-        self.STATIC.localMsger.msg(self.lang("network.hint_in_check"))
-        try:
-            if self.proxy != "":
-                requests.get("https://pixiv.net/", proxies={"https": self.proxy}, timeout=3, verify=False)
-            else:
-                requests.get("https://pixiv.net/", timeout=3, verify=False)
-        except:
-            self.STATIC.localMsger.red(self.lang("network.fail_pixiv_and_use_bypass"))
-            self.api_route = "bypassSNI"
-            self.proxy = ""
-            time.sleep(5)
-
-    def __login(self, refresh_token=None, silent=False):
+    def __login(self) -> None | Exception:
         """
         初始化登录函数。
         """
-        access, refresh, userid = False, False, False
-        try:
-            if refresh_token is None:
-                refresh_token = self.STATIC.file.ain(self.getENV("rootPath") + "usr/.token")
-            if not refresh_token:
-                raise Exception("" if refresh_token is False else "Core.Biu.__login: refresh_token is missing")
-            helper = self.COMMON.loginHelper()
-            if helper.check_network(silent=True, proxy_=self.proxy) is False:
-                raise Exception("Core.Biu.__login: helper.check_network failed")
-            access, refresh, userid = helper.refresh(refresh_token=refresh_token)
-            if access is False or refresh is False:
-                raise Exception("Core.Biu.__login: token error")
-        except Exception as e:
-            if "Captcha challenge" in str(e):
-                self.STATIC.localMsger.red(self.lang("loginHelper.fail_by_cloudflare_captcha"))
-            elif str(e) != "":
-                self.STATIC.localMsger.red(str(e))
-            if silent is False:
-                # 手动获取 Token 过程
-                self.STATIC.localMsger.green(self.lang("loginHelper.hint_token_only"))
-                if input(self.lang("loginHelper.is_need_to_get_token")) != "y":
-                    input(self.lang("common.press_to_exit"))
-                    sys.exit(0)
-                self.STATIC.localMsger.msg(self.lang("loginHelper.hint_before_start"), header="Login Helper")
-                helper = self.COMMON.loginHelper()
-                if helper.check_network() is False:
-                    self.STATIC.localMsger.red(self.lang("loginHelper.fail_to_get_token_due_to_network"))
-                    input(self.lang("common.press_to_exit"))
-                    sys.exit(0)
-                access, refresh, userid = helper.login()
-        if access is False or refresh is False:
-            self.STATIC.localMsger.red(self.lang("loginHelper.fail_to_get_token_anyway"))
-            if silent is False:
-                input(self.lang("common.press_to_exit"))
-                sys.exit(0)
-            return
-        if refresh_token != refresh:
-            self.STATIC.file.aout(self.getENV("rootPath") + "usr/.token", refresh, dRename=False)
-        self.__login_app_api(refresh_token=refresh, access_token=access, userid=None if silent else userid)
+        helper = self.COMMON.loginHelper()
 
-    def __login_app_api(self, refresh_token, access_token=None, userid=None):
+        # Check and set network config
+        _ln(self.lang("network.hint_in_check"))
+        if (
+            helper.check_network(
+                is_no_proxy=self.sets["sys"]["proxy"] == "no", is_silent=False
+            )
+            is False
+        ):
+            raise Exception(self.lang("login.fail_to_get_token_due_to_network"))
+
+        # Set proxy
+        self.proxy = helper.get_proxy()
+        _ln(
+            (
+                f"- {self.lang('config.hint_proxy_in_use')}" % self.proxy
+                if self.proxy
+                else "- No Proxy"
+            ),
+            header=None,
+        )
+
+        # Set bypass mode
+        if helper.is_bypass():
+            _ln(SPrint.red(self.lang("network.fail_pixiv_and_use_bypass")))
+            self.api_route = "bypassSNI"
+            self.proxy = ""
+
+        # Determine refresh token
+        access, userid = False, False
+        refresh = self.STATIC.file.ain(self.getENV("rootPath") + "usr/.token")
+        if not refresh:
+            # Guide user to get the initial refresh token manually
+            _ln(SPrint.green(self.lang("login.hint_token_only")))
+            if input(self.lang("login.is_need_to_get_token")) not in ["y", ""]:
+                raise Exception()
+            access, refresh, userid = helper.login()
+
+        if not refresh:
+            raise Exception(self.lang("login.fail_to_get_token_anyway"))
+
+        # Login and save refresh token
+        self.__login_app_api(
+            refresh_token=refresh,
+            access_token=access if access else None,
+            userid=userid if userid else None,
+        )
+        self.save_token()
+
+    def __login_app_api(
+        self,
+        refresh_token: str,
+        access_token: str | None = None,
+        userid: str | None = None,
+    ):
         """
         app 模式登录。
         """
-        if userid is not None:
+        self.api_route = "direct"
+        if self.api is None:
             _REQUESTS_KWARGS = {}
             if self.proxy != "":
-                _REQUESTS_KWARGS = {"proxies": {"http": self.proxy, "https": self.proxy}}
+                _REQUESTS_KWARGS = {
+                    "proxies": {"http": self.proxy, "https": self.proxy}
+                }
             if self.api_route == "bypassSNI":
                 self.api = ByPassSniApi(**_REQUESTS_KWARGS)
                 self.api.require_appapi_hosts(hostname=self.biuInfo["pApiURL"])
                 self.api.set_accept_language("zh-cn")
             else:
                 self.api = AppPixivAPI(**_REQUESTS_KWARGS)
+        if userid:
             self.api.user_id = userid
-        if access_token is not None:
+        if access_token:
             self.api.set_auth(access_token=access_token, refresh_token=refresh_token)
         else:
             self.api.auth(refresh_token=refresh_token)
-        self.STATIC.localMsger.msg(f"{self.lang('common.success_to_login')} ({self.api_route.upper()})")
+        _ln(f"{self.lang('common.success_to_login')} ({self.api_route.upper()})")
 
     def __show_ready_info(self):
         """
         展示初始化成功消息。
         """
         self.__clear()
-        ver_extra = ""
-        if not self.sets["sys"]["ignoreOutdated"] and self.biuInfo["version"] != -1:
+        version_extra = ""
+        if self.biuInfo["version"] != -1:
             if self.ver >= int(self.biuInfo["version"]):
-                ver_extra = self.lang("outdated.hint_latest")
+                version_extra = self.lang("outdated.hint_latest")
             else:
-                ver_extra = self.STATIC.localMsger.red(
-                    f"%s@%s" % (self.lang("outdated.hint_exist_new"), self.format_version(self.biuInfo["version"])),
-                    header=False, out=False)
-            ver_extra = f" ({ver_extra})"
-        self.STATIC.localMsger.arr(
-            self.STATIC.localMsger.msg(self.lang("ready.done_init"), out=False),
-            "------------",
-            self.STATIC.localMsger.sign(" PixivBiu ", header=False, out=False),
-            "-",
-            (self.lang("ready.hint_run"), "%s (%s)" % (
-                self.STATIC.localMsger.green("http://" + self.sets["sys"]["host"] + "/", header=False, out=False),
-                self.lang("ready.hint_how_to_use"))),
-            (self.lang("ready.hint_version"), "%s%s" % (self.format_version(), ver_extra)),
-            (self.lang('ready.hint_function_types'), "%s, %s, deterPaths@%s" % (
-                self.api_route, self.sets["biu"]["download"]["mode"],
-                "on" if self.sets["biu"]["download"]["deterPaths"] else "off")),
-            (self.lang("ready.hint_image_service"), self.pximgURL + "/"),
-            (self.lang("ready.hint_download_path"),
-             self.sets["biu"]["download"]["saveURI"].replace("{ROOTPATH}", self.lang("ready.hint_program_path"))),
-            "-",
-            self.STATIC.localMsger.sign(" Biu ", header=False, out=False),
-            "------------"
+                version_extra = SPrint.red(
+                    f"%s: %s"
+                    % (
+                        self.lang("outdated.hint_exist_new"),
+                        self.format_version(self.biuInfo["version"]),
+                    ),
+                )
+        else:
+            version_extra = SPrint.red(
+                self.lang("outdated.fail_to_check_duo_to_network")
+            )
+        print("[PixivBiu] " + self.lang("ready.done_init"))
+        print("------------")
+        print(SPrint.sign(" PixivBiu "))
+        print("-")
+        print(
+            self.lang("ready.hint_run"),
+            "%s (%s)"
+            % (
+                SPrint.green(
+                    "http://" + self.sets["sys"]["host"] + "/",
+                ),
+                self.lang("ready.hint_how_to_use"),
+            ),
         )
+        print(
+            self.lang("ready.hint_version"),
+            "%s (%s)" % (self.format_version(), version_extra),
+        )
+        print(
+            self.lang("ready.hint_function_types"),
+            "%s, %s, Proxy@%s"
+            % (
+                self.api_route,
+                self.sets["biu"]["download"]["mode"],
+                (
+                    self.proxy.replace("http://", "").replace("/", "")
+                    if self.proxy
+                    else "Off"
+                ),
+            ),
+        )
+        print(self.lang("ready.hint_image_service"), self.pximgURL + "/")
+        print(
+            self.lang("ready.hint_download_path"),
+            self.sets["biu"]["download"]["saveURI"].replace(
+                "{ROOTPATH}", self.lang("ready.hint_program_path")
+            ),
+        )
+        print("-")
+        print(SPrint.sign(" Biu "))
+        print("------------")
+
+        # Start token timer
         t = threading.Timer(0, self.__pro_refresh_token)
         t.setDaemon(True)
         t.start()
@@ -247,11 +263,26 @@ class CoreBiu(interRoot):
 
     def update_token(self):
         ori_access_token = self.api.access_token
-        self.STATIC.localMsger.msg(
+        _ln(
             f"{self.lang('others.hint_in_update_token')}: %s"
-            % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
-        self.__login(refresh_token=self.api.refresh_token, silent=True)
+            % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())),
+            header=None,
+        )
+        try:
+            self.__login_app_api(refresh_token=self.api.refresh_token)
+            self.save_token()
+        except Exception as e:
+            _ln(SPrint.red(e))
+            return False
         return self.api.access_token != ori_access_token
+
+    def save_token(self, refresh_token: str | None = None) -> bool:
+        token = refresh_token if refresh_token else self.api.refresh_token
+        if token is None:
+            return False
+        return self.STATIC.file.aout(
+            self.getENV("rootPath") + "usr/.token", token, dRename=False
+        )
 
     def update_status(self, type_, key, c):
         """
@@ -305,7 +336,9 @@ class CoreBiu(interRoot):
                 "type": typer,
                 "title": c["title"],
                 "caption": c["caption"],
-                "created_time": self.STATIC.util.format_time(c["create_date"], "%Y-%m-%dT%H:%M:%S%z"),
+                "created_time": self.STATIC.util.format_time(
+                    c["create_date"], "%Y-%m-%dT%H:%M:%S%z"
+                ),
                 "image_urls": {
                     "small": c["image_urls"]["square_medium"],
                     "medium": c["image_urls"]["medium"],
@@ -330,7 +363,11 @@ class CoreBiu(interRoot):
             version = self.ver
         version = str(version)
         WORDS = "abcdefghij"
-        return "2.%s.%s%s" % (int(version[1:3]), int(version[3:5]), WORDS[int(version[-1])])
+        return "2.%s.%s%s" % (
+            int(version[1:3]),
+            int(version[3:5]),
+            WORDS[int(version[-1])],
+        )
 
     def __set_image_host(self):
         """

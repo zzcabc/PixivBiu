@@ -86,7 +86,7 @@ class DoDownload(interRoot):
                     sign = str(r["id"]) if (index + 1 == len(r["meta_pages"])) else "%not_last%"
                 status.append(
                     self.get_download_args(image_url, folder=f"{root_uri}{extra}",
-                                           name=f"{image_save_name}_{str(index)}",
+                                           name=f"{image_save_name}_{str(index+1).zfill(len(str(len(urls))))}",
                                            suf=f".{suf}", file_type=file_type, sign=sign, url_hash=url_hash,
                                            cache_name=cache_name)
                 )
@@ -169,10 +169,11 @@ class DoDownload(interRoot):
             "folder": folder,
             "name": name + suf,
             "dlArgs": {
-                "_headers": {"referer": "https://app-api.pixiv.net/"},
+                "_headers": {"referer": "https://app-api.pixiv.net/", "user-agent": "PixivBiu Client"},
                 "@requests": {"proxies": {"https": self.CORE.biu.proxy}},
                 "@aria2": {
                     "referer": "https://app-api.pixiv.net/",
+                    "user-agent": "PixivBiu Client",
                     "all-proxy": self.CORE.biu.proxy
                 },
                 "@others": {"groupSign": sign},

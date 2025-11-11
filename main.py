@@ -31,7 +31,7 @@ def api(path):
     return jsonify(handle.handleRoute.do(path))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Altfe 框架初始化
     time.sleep(10)
     classRoot.setENV("rootPath", rootPath)
@@ -43,7 +43,7 @@ if __name__ == '__main__':
 
     # 调整日志等级
     if not SETS["sys"]["debug"]:
-        cli = sys.modules['flask.cli']
+        cli = sys.modules["flask.cli"]
         cli.show_server_banner = lambda *x: None
         logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
@@ -60,7 +60,9 @@ if __name__ == '__main__':
         )
     except UnicodeDecodeError:
         print("您的计算机名可能存在特殊字符，程序无法正常运行。")
-        print("若是 Windows 系统，可以尝试进入「计算机-属性-高级系统设置-计算机名-更改」，修改计算机名，只可含有 ASCII 码支持的字符。")
+        print(
+            "若是 Windows 系统，可以尝试进入「计算机-属性-高级系统设置-计算机名-更改」，修改计算机名，只可含有 ASCII 码支持的字符。"
+        )
         input("按任意键退出...")
     except Exception:
         print(traceback.format_exc())
